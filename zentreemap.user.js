@@ -1,135 +1,106 @@
 // ==UserScript==
 // @name         zentreemap
 // @namespace    http://your.homepage/
-// @version      0.2
-// @description  test
+// @version      0.3
+// @description  чуть доработанная карта, убран кортеж из тегов, добавлен переключатель группировки по номеру тега
 // @author       krasnov
 // @match        https://zenmoney.ru/a/*
 // @grant        none
 // ==/UserScript==
-var globalTitle = "Категории";
+function getFunc(me,tagOrder) {
+    return function(data) {
+        var tree = [];
+        var key_hash = {};
+        var dl = data.length;
 
-function httpGetSync(theUrl)
-{
-    var xmlHttp = new XMLHttpRequest();
-    xmlHttp.open("GET", theUrl, false); // synchronous 
-    xmlHttp.send(null);
-    return xmlHttp.responseText;
-}
-function getJSON(url)
-{
-    var r = httpGetSync(url);
-    var d = JSON.parse(r);
-    return d;
-}
-function getTransactions()
-{
-    var date = new Date(), y = date.getFullYear(), m = date.getMonth();
-    var fD = new Date(y, m-3, 1);
-    var lD = new Date(y, m + 1, 0);
-    
-    var fDs = fD.toFormat('%Y-%m-%d');
-    var lDs = lD.toFormat('%Y-%m-%d');
-    //return getJSON("https://zenmoney.ru/api/v2/transaction/?date_between%5B%5D="+fDs+"&date_between%5B%5D="+lDs+"&skip=0&type_notlike=uit&finder=");
-    return getJSON("https://zenmoney.ru/api/v2/transaction?limit=null&type_notlike=uit&date_between%5B%5D="+fDs+"&date_between%5B%5D="+lDs);
-}
-function getProfile()
-{
-    //return getJSON("https://zenmoney.ru/s1/profile");
-    return zm.profile;
-}
+        for (var i = 0; i < dl; i++) {
+            var trans = data[i];
+            var dkey = '';
+            var tkey = ''; // название категории
 
-function agregateTransactions()
-{
-    var p = getProfile();
-    var t = getTransactions();
-    
-    var d = [];
-    
-    t.filter(function(tr){ 
-        return tr.tag_groups !== null;
-    }).forEach(function(tr, i, arr) {
-        var sum = parseFloat(tr.outcome);
-        var cat0 = parseInt(p.tag_groups[tr.tag_groups[0]].tag0);
-        var cat1 = parseInt(p.tag_groups[tr.tag_groups[0]].tag1);
+            // transaction filter
+            if (me.checkSkip(trans)) continue;
 
-        var add = function(cat,pcat,sum)
-        {
-            if (cat==null || isNaN(cat) || cat==undefined) return;
-            
-            var tag = p.tags[cat].id;
-            var tagTitle = p.tags[cat].title;
-            var ptagTitle = (pcat!=null)?p.tags[pcat].title:globalTitle;
-            if (d[tag] === undefined)
-            {
-                d[tag] = { "id": ptagTitle+tagTitle, "title": tagTitle, "pid": globalTitle+ptagTitle, "sum": sum };
+            if (trans.tag_groups === null ) {
+                if(trans.account_income != trans.account_outcome ){
+                    tkey = 'Перевод'; 
+                    dkey = 'transer';
+                } else {
+                    tkey = 'Без категории';
+                    dkey = 'null';
+                }
+            } else {
+                var tg_arr = [];
+                var tg = trans.tag_groups[tagOrder];
+                if (!tg) continue; // если тега с номером tagOrder нет, то пропускаем
+                var tag = zm.profile.tag_groups[tg]['tag0']; 
+                tg_arr.push(tag);
+                tkey += zm.profile.tags[tag].title;
+
+                dkey = tg_arr.sort().join(':');
             }
-            else
-            {
-                d[tag].sum = d[tag].sum+sum;
-            }        
+            var n = key_hash[dkey];
+            if (n === undefined) {
+                n = tree.push(['<p>' + tkey + '</p>', [], 0]) - 1;
+                key_hash[dkey] = n;
+            }
+
+
+            var uc = zm.profile.user.currency,
+                ts = Math.round(Math.abs(me.getTransSum(trans, uc)));
+            tree[n][2] += ts;
+
+            if ($('#dynamicsFilters .treeMapTypeList .type').val() == -1) {
+                tr_sum = trans.outcome < 1 ? trans.outcome : Math.floor(trans.outcome);
+                tr_instr = trans.instrument_outcome;
+            } else {
+                tr_sum = trans.income < 1 ? trans.income : Math.floor(trans.income);
+                tr_instr = trans.instrument_income;
+            }
+
+            var tst = String(tr_sum).toCost();
+
+            if (zm.profile.user.currency != tr_instr) {
+                tst = String(tst).replace(/\s/g, '&thinsp;') + '&thinsp;' + htmlSymbol(tr_instr);
+            }
+
+            tree[n][1].push(['<div></div><p>' + tst + '</p>', ts, i]);
         }
-        add(cat0,null,sum);
-        add(cat1,cat0,sum);
-    });
-    
-    console.log(d);
-    return d;
+        return tree;
+    };
 }
 
-function convertToDataTable(aggregated)
-{
-    var arr = [["T1","T2","T3","T4"],[{v:globalTitle+globalTitle, f:globalTitle},null,0,0]];
-    var r = [];
+function activateZenTreeMap() {
+    var me = zm.loader.page.treemap;
+    me.generateTreeByTag = getFunc(me,0);
+    me.generateTreeByTag1 = getFunc(me,1);
 
-    aggregated.forEach(function(ag){
-        //arr.push([ag.title,ag.ptitle,parseInt(ag.sum),parseInt(ag.sum)]);
-        arr.push([{v:ag.id, f:ag.title + " ("+ag.sum+")"},ag.pid,parseInt(ag.sum),parseInt(ag.sum)]);
-        
-    });
-
-    console.log(arr);
-    return arr;
-}
-
-function drawTree(drawId,datatable)
-{
-    google.load("visualization", "1", {packages:["treemap"], callback: drawChart});
-    
-    function drawChart() {
-        var data = google.visualization.arrayToDataTable(datatable);
-console.log(data);
-        tree = new google.visualization.TreeMap(document.getElementById(drawId));
-
-        tree.draw(data, {
-            highlightOnMouseOver: true,
-            maxDepth: 1,
-            maxPostDepth: 2,
-            minHighlightColor: '#8c6bb1',
-            midHighlightColor: '#9ebcda',
-            maxHighlightColor: '#edf8fb',
-            minColor: '#009688',
-            midColor: '#f7f7f7',
-            maxColor: '#ee8100',
-            headerHeight: 15,
-            showScale: true,
-            height: 500,
-            useWeightedAverageForAggregation: true
-        });
-      }
-}
-
-function main() {
-    var dt = convertToDataTable(agregateTransactions());
-    var script = document.createElement("script");
-    script.setAttribute("src", "//www.google.com/jsapi");
-    script.addEventListener("load",function() {drawTree("tree_place",dt)});
-    document.body.appendChild(script);
+    $(".groupBy option[value='tag']").replaceWith("<option value='tag'>Первому тегу</option><option value='tag1'>Второму тегу</option>");
+    $(".groupBy").val('tag').change();
 }
 
 $(function () {
-    $('#header').append("<div id='tree_place' style='width: 100%; height: 500px;'></div>");
-    //$('#header').append("<div id='tree_place'></div>");
-    setTimeout(main, 1000);
-    //main();
+    zm.bind('zenmoney_onload', function(){ 
+        if (zm.loader.url == "reports/treemap")
+        {
+            var cookName = "zentreemap";
+            var isZenTreeMap = $.cookie(cookName)==1;
+            
+            $("div.treeMapOrder span.title").on("click", function() {
+                var isOn = $.cookie(cookName)==1;
+                
+                if (!isOn) {alert("zentreemap вкл.");} else { alert("zentreemap выкл. обновите страницу.");}
+                
+                $.cookie(cookName, !isOn?1:0, {
+                    expires: 1000
+                });
+                
+                if (!isOn) { activateZenTreeMap(); }
+            });
+            
+            if (isZenTreeMap) {
+                setTimeout(activateZenTreeMap, 1000);
+            }
+        }
+    });
 });
