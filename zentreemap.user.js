@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         zentreemap
 // @namespace    http://your.homepage/
-// @version      0.3
+// @version      0.4
 // @description  чуть доработанная карта, убран кортеж из тегов, добавлен переключатель группировки по номеру тега
 // @author       krasnov
 // @match        https://zenmoney.ru/a/*
@@ -23,6 +23,7 @@ function getFunc(me,tagOrder) {
 
             if (trans.tag_groups === null ) {
                 if(trans.account_income != trans.account_outcome ){
+                    continue; // не выводим переводы
                     tkey = 'Перевод'; 
                     dkey = 'transer';
                 } else {
