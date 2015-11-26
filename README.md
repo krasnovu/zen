@@ -8,5 +8,5 @@
 
 # zenaccgroups
 Позволяет группировать счета в свои группы. Названия и количество групп возможно настроить в исходном коде скрипта. По умолчанию создается три группы. Счета можно таскать мышкой как в группе так и между группами. Состояние сохраняется в куки.
-![](https://raw.githubusercontent.com/krasnovu/treemap/master/img/zenaccgroups/zenaccgroups1.jpg)
 
+![](https://raw.githubusercontent.com/krasnovu/treemap/master/img/zenaccgroups/zenaccgroups1.jpg)
