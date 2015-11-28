@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         zenaccgroups
 // @namespace    http://your.homepage/
-// @version      0.1
+// @version      0.2
 // @description  группировка счетов в транзакциях
 // @author       krasnov
 // @match        https://zenmoney.ru/a/*
@@ -9,9 +9,9 @@
 // ==/UserScript==
 
 var __GROUPS = [
-    {id:"group_1",name:"Первая группа"},
-    {id:"group_2",name:"Вторая группа"},
-    {id:"group_3",name:"Третья группа"}
+     {id:"group_1",name:"Первая группа"}
+    ,{id:"group_2",name:"Вторая группа"}
+    ,{id:"group_3",name:"Третья группа"}
                ];
 
 var __COOKIEPREF = "zenaccgroups";
@@ -67,33 +67,47 @@ function addGroup(container,id,name) {
 }
 
 function backupGroupsOrders(container) {
-    var userId = zm.profile.user.id;
+    var cookName = __COOKIEPREF+zm.profile.user.id;
+    
+    $.cookie(cookName, JSON.stringify(__GROUPS), {expires:1000});
+    
     var orderGroups = new Array();
     container.find("div[id]").each(function(){
         orderGroups.push($(this).attr("id"));
     });
-    $.cookie(__COOKIEPREF+userId,JSON.stringify(orderGroups), {expires: 1000});    
+    $.cookie(cookName+'_ord', JSON.stringify(orderGroups), {expires: 1000});    
 
     __GROUPS.forEach(function (gitem,gi,garr) {
         var orderAccs = new Array();
         container.find('#'+gitem.id).find("li[id]").each(function(){
             orderAccs.push($(this).attr("id"));
         });
-        $.cookie(__COOKIEPREF+userId+'_'+gitem.id, JSON.stringify(orderAccs), {expires: 1000});
+        $.cookie(cookName+'_'+gitem.id, JSON.stringify(orderAccs), {expires: 1000});
     });      
 }
 
 function restoreGroupsOrders(container) {
-    var userId = zm.profile.user.id;
-    var orderGroups = JSON.parse($.cookie(__COOKIEPREF+userId));
+    var cookName = __COOKIEPREF+zm.profile.user.id;
+    
+    var groups = JSON.parse($.cookie(cookName));
+    if (groups) {
+        __GROUPS = groups;
+    }
+    
+    var orderGroups = JSON.parse($.cookie(cookName+'_ord'));
     if (orderGroups) {
         orderGroups.forEach(function(item,i,arr){
+            if ($("div").is("#"+item)) {;}
+            else {
+                addGroup(container,item,"");
+            }
             $('#'+item).appendTo(container);
         });
     }
     
     __GROUPS.forEach(function (gitem,gi,garr) {
-        var orderAccs = JSON.parse($.cookie(__COOKIEPREF+userId+'_'+gitem.id));
+        $("#"+gitem.id+" div.groupInfo li span.title b").html(gitem.name);
+        var orderAccs = JSON.parse($.cookie(cookName+'_'+gitem.id));
         if (orderAccs) {
             orderAccs.forEach(function(item,i,arr){
                 $('#'+item).appendTo(container.find('#'+gitem.id));
@@ -105,6 +119,7 @@ function restoreGroupsOrders(container) {
 function connectAllToAll(container) {
     container.find("div[id]").each(function(index){
         $(this).sortable({
+            scroll: false,
             connectWith:"ul.accounts_list div[id]",
             update: function(event, ui) {
                 var groupId = $(this).attr("id");
@@ -118,12 +133,12 @@ function connectAllToAll(container) {
 }
 
 function activate() {
+    $("ul.accounts_list li span.more").parent().remove();
+    $("ul.accounts_list li.not_in_bal").removeClass("hidden");
+
     var acclist = $("ul.accounts_list");
     var accs = acclist.find("li");
 
-    acclist.find("li span.more").parent().remove();
-    acclist.find("li.not_in_bal").removeClass("hidden");
-    
     accs.each(function(index) {
         $(this).attr("id",$(this).find("span.title a").attr("rel"));
     });
@@ -134,6 +149,7 @@ function activate() {
     });
     
     acclist.sortable({
+        scroll: false,
         items:'div[id]',
         update: function(event, ui) {
             backupGroupsOrders(acclist);
@@ -141,25 +157,18 @@ function activate() {
     });
 
     restoreGroupsOrders(acclist);
-    
+
     connectAllToAll(acclist);
 }
 
-function load_jquery_ui()
-{
-    $("head").append("<link rel='stylesheet' href='//ajax.googleapis.com/ajax/libs/jqueryui/1.8/themes/base/jquery-ui.css' type='text/css'/>")
-
-    var script = document.createElement("script");
-    script.setAttribute("src", "//ajax.googleapis.com/ajax/libs/jqueryui/1.8/jquery-ui.min.js");
-    script.addEventListener("load",activate);
-    document.body.appendChild(script);
-}
-
 $(function () {
+    $("head").append("<link rel='stylesheet' href='//ajax.googleapis.com/ajax/libs/jqueryui/1.8/themes/base/jquery-ui.css' type='text/css'/>");
+    $("head").append("<script src='//ajax.googleapis.com/ajax/libs/jqueryui/1.8/jquery-ui.min.js'/>");
+
     zm.bind('zenmoney_onload', function(){ 
         if (zm.loader.url == "transactions" || zm.loader.url == "reminders")
         {
-            setTimeout(load_jquery_ui,0);
+            activate();
         }
     });
 });
