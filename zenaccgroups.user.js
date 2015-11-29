@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         zenaccgroups
 // @namespace    http://your.homepage/
-// @version      0.2
+// @version      0.3
 // @description  группировка счетов в транзакциях
 // @author       krasnov
 // @match        https://zenmoney.ru/a/*
@@ -168,7 +168,16 @@ $(function () {
     zm.bind('zenmoney_onload', function(){ 
         if (zm.loader.url == "transactions" || zm.loader.url == "reminders")
         {
-            activate();
+            if ($("ul.accounts_list").is(":has(div[id])")) {}
+            else {
+                activate();
+                /*zm.pbind('zenmoney_hashchange', function() {
+                    connectAllToAll($('ul.accounts_list'));
+                });*/
+                zm.pbind('update_balance', function() {
+                    setTimeout(function() { connectAllToAll($('ul.accounts_list')) },1000);
+                });
+            }
         }
     });
 });
